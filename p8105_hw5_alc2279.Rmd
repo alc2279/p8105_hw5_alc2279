@@ -34,6 +34,25 @@ The Washington Post has gathered data on homicides in 50 large U.S. cities and
 made the data available through a GitHub repository here. You can read their 
 accompanying article here.
 
+
+```{r}
+rm(list=ls())
+
+library(tidyverse)
+library(stringr)
+```
+
+
+```{r}
+homocide_url = "https://raw.githubusercontent.com/washingtonpost/data-homicides/master/homicide-data.csv"
+
+homocide_data = 
+  read.csv(url(homocide_url)) %>% 
+  janitor::clean_names() %>% 
+  as_tibble()
+```
+
+
 ## Part 1: Describe the data
 
 ### Prompt
@@ -50,12 +69,72 @@ cities to obtain the total number of homicides and the number of unsolved
 homicides (those for which the disposition is “Closed without arrest” or 
 “Open/No arrest”). (Annie edit - comment on this?)
 
+```{r}
+homocide_data =
+  homocide_data %>% 
+  mutate(city_state = str_c(city, state, sep = ", ")) %>% 
+  group_by(city_state) %>% 
+  mutate(total_city_homocides = n())
+
+## more elegant way to get the total number of homocides? 
+## create new data table?
+homocide_data = 
+  homocide_data %>% 
+  filter(disposition %in% c("Closed without arrest", "Open/No arrest")) %>% 
+  summarise(unsolved_homocides = n(),
+            total_homocides = max(total_city_homocides)) %>% 
+  nest(unsolved_homocides:total_homocides)
+```
+
+
 ## Part 3: Unsolved homocides in Baltimore
 
 For the city of Baltimore, MD, use the prop.test function to estimate the 
 proportion of homicides that are unsolved; save the output of prop.test as an 
 R object, apply the broom::tidy to this object and pull the estimated proportion 
 and confidence intervals from the resulting tidy dataframe.
+
+```{r}
+## create prop.test function here
+
+homocide_prop = function(df) {
+  homocide_prop_test = prop.test(df$unsolved_homocides, df$total_homocides, 
+            alternative = "two.sided", conf.level = 0.95, correct = FALSE)
+  
+  broom::tidy(homocide_prop_test) %>% 
+  select(estimate, conf.low, conf.high)
+}
+
+balt_unsolved_prop =
+  homocide_data %>% 
+  filter(city_state == "Baltimore, MD") %>% 
+  pull(data) %>% 
+  homocide_prop()
+
+library(purrr)
+```
+
+```{r}
+## create prop.test function here
+
+homocide_prop = function(df, x, y) {
+  homocide_prop_test = prop.test(df$x, df$y, 
+            alternative = "two.sided", conf.level = 0.95, correct = FALSE)
+  
+  broom::tidy(homocide_prop_test) %>% 
+  select(estimate, conf.low, conf.high)
+}
+
+balt_unsolved_prop =
+  homocide_data %>% 
+  filter(city_state == "Baltimore, MD") %>% 
+  homocide_prop(homocide_data, unsolved_homocides, total_homocides)
+
+library(purrr)
+
+is.list(homocide_data)
+```
+
 
 ## Part 4: Unsolved homocides per city
 
@@ -64,6 +143,15 @@ proportion of unsolved homicides and the confidence interval for each. Do this
 within a “tidy” pipeline, making use of purrr::map, purrr::map2, list columns 
 and  unnest as necessary to create a tidy dataframe with estimated proportions 
 and CIs for each city.
+
+
+```{r}
+# make a prop test function that spits out city, estimate, conf interval
+# run function across each city, adding another row to database
+
+output = map(homocide_data, homocide_prop())
+
+```
 
 ## Part 5: Create a plot
 
