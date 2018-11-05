@@ -1,10 +1,16 @@
 ---
 title: 'P8105 Homework 5: Iteration'
 author: "Annie Clark"
-date: "November 2, 2018"
+date: "November 9, 2018"
 output: github_document
 ---
 
+```{r}
+library(tidyverse)
+library(stringr)
+library(purrr)
+library(viridis)
+```
 
 # Problem 1
 This zip file contains data from a longitudinal study that included a control 
@@ -25,31 +31,25 @@ make sure weekly observations are “tidy”, and do any other tidying that’s
 necessary
 
 ```{r}
+## List of file names
+file_names = list.files("./data")
 
-?list.files
-
-## 1. create list of file names
-con = "con"
-exp = "exp"
-file_begin = "_0"
-file_end = ".csv"
-con_file_names = str_c(con, file_begin, 1:9, file_end)
-exp_file_names = str_c(exp, file_begin, 1:9, file_end)
-
-con_file_names = c(con_file_names, "con_10.csv")
-exp_file_names = c(exp_file_names, "exp_10.csv")
-
-file_names = c(con_file_names, exp_file_names)
-
-
-## 2. create function to read csv files
+## Function to read cvs files and add file name
 read_csv_function = function(file_name) {
-  patient_data = 
+  subject_data = 
     read_csv(file = str_c("./data/", file_name)) %>% 
     mutate(file = file_name)
 }
 
-patient_data = map_df(file_names, read_csv_function)
+## Load all files + tidy data
+subject_data = 
+  map_df(file_names, read_csv_function) %>% 
+  gather(key = week, value = observation, week_1:week_8) %>% 
+  separate(file, into = c("group", "subject"), sep = "_") %>% 
+  mutate(week = str_replace(week, "week_", ""),
+         subject = str_replace(subject,".csv",""),
+         group = recode(group, "con" = "control", 
+                        "exp" = "experimental"))
 
 ```
 
@@ -59,8 +59,23 @@ patient_data = map_df(file_names, read_csv_function)
 Make a spaghetti plot showing observations on each subject over time, and 
 comment on differences between groups.
 
-```{r}
 
+```{r}
+subject_data %>% 
+  mutate(group = recode(group, "control" = "Control", "experimental" = "Experimental")) %>% 
+  ggplot(aes(x = week, y = observation, group = subject, color = subject)) + 
+    geom_path() + 
+    facet_grid(~group) + 
+    labs(
+      title = "Subject Observations over Time",
+      x = "Week",
+      y = "Observation"
+    ) + 
+    theme(legend.position = "bottom") +
+    viridis::scale_color_viridis(
+      name = "Subject ID", 
+      discrete = TRUE
+    )
 ```
 
 
@@ -70,20 +85,11 @@ made the data available through a GitHub repository here. You can read their
 accompanying article here.
 
 
-```{r}
-rm(list=ls())
-
-library(tidyverse)
-library(stringr)
-library(purrr)
-library(plotly)
-
-```
 
 
 ```{r}
 homicide_url = "https://raw.githubusercontent.com/washingtonpost/data-homicides/master/homicide-data.csv"
-
+## Read in data from github
 homicide_data = 
   read.csv(url(homicide_url)) %>% 
   janitor::clean_names() %>% 
@@ -105,27 +111,18 @@ Describe the raw data.
 Create a city_state variable (e.g. “Baltimore, MD”) and then summarize within 
 cities to obtain the total number of homicides and the number of unsolved 
 homicides (those for which the disposition is “Closed without arrest” or 
-“Open/No arrest”). (Annie edit - comment on this?)
+“Open/No arrest”).
 
 ```{r}
+## Create city_state var and summarise by city_state
 homicide_data =
   homicide_data %>% 
   mutate(city_state = str_c(city, state, sep = ", ")) %>% 
   group_by(city_state) %>% 
-  mutate(total_city_homicides = n())
-
-## more elegant way to get the total number of homocides? 
-## create new data table?
-
-homicide_data = 
-  homicide_data %>% 
+  mutate(total_city_homicides = n()) %>% 
   filter(disposition %in% c("Closed without arrest", "Open/No arrest")) %>% 
   summarise(unsolved_homicides = n(),
             total_homicides = max(total_city_homicides))
-
-
-View(homocide_data)
-
 ```
 
 
@@ -138,31 +135,9 @@ and confidence intervals from the resulting tidy dataframe.
 
 
 
-
 ```{r}
-
-## create prop.test function here
-
-homicide_prop = function(df, city_state) {
-  homicide_prop_test = prop.test(df$unsolved_homicides, df$total_homicides, 
-            alternative = "two.sided", conf.level = 0.95, correct = FALSE)
-  
-  broom::tidy(homicide_prop_test) %>% 
-    mutate(city_state = city_state) %>% 
-    select(city_state, estimate, conf.low, conf.high)
-}
-
-homicide_data %>% 
-  filter(city_state == "Baltimore, MD") %>% 
-  homicide_prop(., .$city_state)
-  
-```
-
-```{r}
-
-## create prop.test function here
-
-homicide_prop2 = function(df) {
+## Function to run prop_test + clean up results
+homicide_prop = function(df) {
   homicide_prop_test = prop.test(df$unsolved_homicides, df$total_homicides, 
             alternative = "two.sided", conf.level = 0.95, correct = FALSE)
   
@@ -170,10 +145,14 @@ homicide_prop2 = function(df) {
     select(estimate, conf.low, conf.high)
 }
 
+## Prop.test function applied to Baltimore, MD
 homicide_data %>% 
   filter(city_state == "Baltimore, MD") %>% 
-  homicide_prop2()
-  
+  homicide_prop() %>% 
+  rename("Proportion of Unsolved Cases" = estimate, 
+         "Lower bound (95% CI)" = conf.low, 
+         "Upper bound (95% CI)" = conf.high) %>% 
+  knitr::kable()
 ```
 
 
@@ -188,32 +167,14 @@ and CIs for each city.
 
 
 ```{r}
-homicide_data_nest = 
-  homicide_data %>% 
-  nest(unsolved_homicides:total_homicides)
-
-
-map2_df(.x = homicide_data_nest$data, 
-        .y = homicide_data_nest$city_state, 
-        ~homicide_prop(.x, .y))
-```
-
-
-```{r}
-homicide_data_nest = 
-  homicide_data %>% 
-  nest(unsolved_homicides:total_homicides) %>% 
-  mutate(prop_tests = map2(.x = .$data, .y = .$city_state, ~homicide_prop(.x, .y))) %>% 
-  unnest()
-```
-
-
-```{r}
+## Prop test function applied to all cities
 homicide_data = 
   homicide_data %>% 
   nest(unsolved_homicides:total_homicides) %>% 
-  mutate(prop_tests = map(.x = .$data, ~homicide_prop2(.x))) %>% 
-  unnest()
+  mutate(prop_tests = map(.x = .$data, ~homicide_prop(.x))) %>% 
+  unnest() %>% 
+  rename(unsolved_estiamte = estimate, lower_bound = conf.low,
+         upper_bound = conf.high)
 ```
 
 ## Part 5: Create a plot
@@ -224,21 +185,21 @@ Organize cities according to the proportion of unsolved homicides.
 
 
 ```{r}
-homicide_plot =
-  homicide_data %>% 
-  mutate(city_state = forcats::fct_reorder(city_state, desc(estimate))) %>%
-  ggplot(aes(x = city_state, y = estimate)) + 
+homicide_data %>% 
+  mutate(city_state = forcats::fct_reorder(city_state, desc(unsolved_estiamte))) %>%
+  ggplot(aes(x = city_state, y = unsolved_estiamte, color = city_state)) + 
     geom_point() +
-    geom_errorbar(aes(ymin = conf.low, ymax = conf.high, width = 0.2)) + 
+    geom_errorbar(aes(ymin = lower_bound, ymax = upper_bound, width = 0.2)) + 
     theme(axis.text.x = element_text(angle = 60, hjust = 1)) + 
     labs(
         title = "Proportion of Unsolved Homocides in 50 Large Cities",
         x = "City, State",
-        y = "Proportion of Unsolved Cases"
-      )
-
-
-ggplotly(homicide_plot)
-
+        y = "Proportion of Unsolved Cases", 
+        caption = "Data from the Washington Post"
+      ) +
+    theme(legend.position = "none") +
+    viridis::scale_color_viridis(
+      discrete = TRUE
+    )
 ```
 
