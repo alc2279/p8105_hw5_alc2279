@@ -24,10 +24,45 @@ and saving the result as a new variable in the dataframe
 make sure weekly observations are “tidy”, and do any other tidying that’s 
 necessary
 
+```{r}
+
+?list.files
+
+## 1. create list of file names
+con = "con"
+exp = "exp"
+file_begin = "_0"
+file_end = ".csv"
+con_file_names = str_c(con, file_begin, 1:9, file_end)
+exp_file_names = str_c(exp, file_begin, 1:9, file_end)
+
+con_file_names = c(con_file_names, "con_10.csv")
+exp_file_names = c(exp_file_names, "exp_10.csv")
+
+file_names = c(con_file_names, exp_file_names)
+
+
+## 2. create function to read csv files
+read_csv_function = function(file_name) {
+  patient_data = 
+    read_csv(file = str_c("./data/", file_name)) %>% 
+    mutate(file = file_name)
+}
+
+patient_data = map_df(file_names, read_csv_function)
+
+```
+
+
 ## Part 2: Make a plot
 
 Make a spaghetti plot showing observations on each subject over time, and 
 comment on differences between groups.
+
+```{r}
+
+```
+
 
 # Problem 2
 The Washington Post has gathered data on homicides in 50 large U.S. cities and 
@@ -40,14 +75,15 @@ rm(list=ls())
 
 library(tidyverse)
 library(stringr)
+library(purrr)
 ```
 
 
 ```{r}
-homocide_url = "https://raw.githubusercontent.com/washingtonpost/data-homicides/master/homicide-data.csv"
+homicide_url = "https://raw.githubusercontent.com/washingtonpost/data-homicides/master/homicide-data.csv"
 
-homocide_data = 
-  read.csv(url(homocide_url)) %>% 
+homicide_data = 
+  read.csv(url(homicide_url)) %>% 
   janitor::clean_names() %>% 
   as_tibble()
 ```
@@ -70,20 +106,30 @@ homicides (those for which the disposition is “Closed without arrest” or
 “Open/No arrest”). (Annie edit - comment on this?)
 
 ```{r}
-homocide_data =
-  homocide_data %>% 
+homicide_data =
+  homicide_data %>% 
   mutate(city_state = str_c(city, state, sep = ", ")) %>% 
   group_by(city_state) %>% 
-  mutate(total_city_homocides = n())
+  mutate(total_city_homicides = n())
 
 ## more elegant way to get the total number of homocides? 
 ## create new data table?
-homocide_data = 
-  homocide_data %>% 
+
+homicide_data = 
+  homicide_data %>% 
   filter(disposition %in% c("Closed without arrest", "Open/No arrest")) %>% 
-  summarise(unsolved_homocides = n(),
-            total_homocides = max(total_city_homocides)) %>% 
-  nest(unsolved_homocides:total_homocides)
+  summarise(unsolved_homicides = n(),
+            total_homicides = max(total_city_homicides))
+
+
+View(homocide_data)
+```
+
+
+```{r}
+homicide_data_nest = 
+  homicide_data %>% 
+  nest(unsolved_homicides:total_homicides)
 ```
 
 
@@ -94,11 +140,34 @@ proportion of homicides that are unsolved; save the output of prop.test as an
 R object, apply the broom::tidy to this object and pull the estimated proportion 
 and confidence intervals from the resulting tidy dataframe.
 
+
+
+
 ```{r}
+
 ## create prop.test function here
 
-homocide_prop = function(df) {
-  homocide_prop_test = prop.test(df$unsolved_homocides, df$total_homocides, 
+homicide_prop = function(df) {
+  homicide_prop_test = prop.test(df$unsolved_homicides, df$total_homicides, 
+            alternative = "two.sided", conf.level = 0.95, correct = FALSE)
+  
+  broom::tidy(homicide_prop_test) %>% 
+  select(estimate, conf.low, conf.high)
+}
+
+balt_unsolved_prop =
+  homicide_data %>% 
+  filter(city_state == "Baltimore, MD") %>% 
+  homicide_prop()
+```
+
+
+```{r}
+
+## create prop.test function here
+
+homocide_prop2 = function(x = unsolved_homocides, y = total_homocides) {
+  homocide_prop_test = prop.test(x, y, 
             alternative = "two.sided", conf.level = 0.95, correct = FALSE)
   
   broom::tidy(homocide_prop_test) %>% 
@@ -106,35 +175,12 @@ homocide_prop = function(df) {
 }
 
 balt_unsolved_prop =
-  homocide_data %>% 
+  homocide_data_nest %>% 
   filter(city_state == "Baltimore, MD") %>% 
   pull(data) %>% 
-  homocide_prop()
-
-library(purrr)
+  select(unsolved_homocides)
+  homocide_prop2()
 ```
-
-```{r}
-## create prop.test function here
-
-homocide_prop = function(df, x, y) {
-  homocide_prop_test = prop.test(df$x, df$y, 
-            alternative = "two.sided", conf.level = 0.95, correct = FALSE)
-  
-  broom::tidy(homocide_prop_test) %>% 
-  select(estimate, conf.low, conf.high)
-}
-
-balt_unsolved_prop =
-  homocide_data %>% 
-  filter(city_state == "Baltimore, MD") %>% 
-  homocide_prop(homocide_data, unsolved_homocides, total_homocides)
-
-library(purrr)
-
-is.list(homocide_data)
-```
-
 
 ## Part 4: Unsolved homocides per city
 
@@ -149,8 +195,11 @@ and CIs for each city.
 # make a prop test function that spits out city, estimate, conf interval
 # run function across each city, adding another row to database
 
-output = map(homocide_data, homocide_prop())
+homocide_data_nest[[2]]
 
+output = map_2(homocide_data_nest, homocide_prop2(.x = unsolved_homocides, .y = total_homocides))
+
+output = map(homicide_data, homicide_prop)
 ```
 
 ## Part 5: Create a plot
