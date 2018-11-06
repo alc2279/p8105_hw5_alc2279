@@ -31,10 +31,10 @@ make sure weekly observations are “tidy”, and do any other tidying that’s
 necessary
 
 ```{r}
-# List of file names
+## List of file names
 file_names = list.files("./data")
 
-# Function to read cvs files and add file name
+## Function to read cvs files and add file name
 read_csv_function = function(file_name) {
   subject_data = 
     read_csv(file = str_c("./data/", file_name)) %>% 
@@ -59,7 +59,6 @@ subject_data =
 Make a spaghetti plot showing observations on each subject over time, and 
 comment on differences between groups.
 
-
 ```{r}
 subject_data %>% 
   mutate(group = recode(group, "control" = "Control", "experimental" = "Experimental")) %>% 
@@ -78,13 +77,14 @@ subject_data %>%
     )
 ```
 
+The observations for the subjects in the control arm over the 8 weeks stay relatively constant over (and potentially decreasing), while the observations for the subjects in the experimental arm have an increasing trend. I would be interested in doing additional statistical analysis to confirm that the treatment had a significant effect on the outcome. 
+
+Please note: it is unclear if the subject IDs are unique within the control/experimental arms or are global subject IDs (suggesting that each of the IDs went through both the control and experimental arms). If the subject IDs are only unique within the arms, I would change the above graphs to make it clearer that the subjects with the same subject IDs from both arms are different.  
 
 # Problem 2
 The Washington Post has gathered data on homicides in 50 large U.S. cities and 
 made the data available through a GitHub repository here. You can read their 
 accompanying article here.
-
-
 
 
 ```{r}
@@ -104,10 +104,14 @@ homicide_data =
 Describe the raw data. 
 
 ### Response
+The homicide dataset has `r nrow(homicide_data)` rows and `r ncol(homicide_data)` columns. Each row contains information about a single homicide that has occurred, such as location (city, state, latitude/longitude), victim information (first/last name, age, sex, disposition) and information about the homicide (disposition, reported date, id). The date range of reports spans from `r min(homicide_data$reported_date)` to 20171231. There are two invalid reported date values that are most likely typos ("201511105" and "201511018"). The data includes `r count(homicide_data, city) %>% nrow()` cities in `r count(homicide_data, state) %>% nrow()` states. There are a total of 51 distinct city/state combinations, including Tulsa, AL. This is most likely a typo for Tulsa OK (confirmed with the longitude/latitude coordinates). Because this particular homicide was closed with an arrest and the primary purpose of the analysis is to look at unsolved homicides, this case was not included in the analysis. 
+
+`r round(homicide_data %>% filter(disposition == "Closed by arrest") %>% nrow() / nrow(homicide_data) * 100)`% of the homicides were solved by arrest and `r round(homicide_data %>% filter(disposition != "Closed by arrest") %>% nrow() / nrow(homicide_data) * 100)`% of the cases are considered unsolved (solved with no arrest or still open/no arrest). 
+
+`r round(homicide_data %>% filter(victim_sex == "Male") %>% nrow() / nrow(homicide_data) * 100)`% of the homicides had male victims, `r round(homicide_data %>% filter(victim_sex == "Female") %>% nrow() / nrow(homicide_data) * 100)`% of homicides had female victims and the remaining `r round(homicide_data %>% filter(victim_sex == "Male") %>% nrow() / nrow(homicide_data) * 100)`% of cases had unknown genders of the victims. 
 
 
-
-## Part 2: Number of homocides and unsolved homocides per city
+## Part 2: Number of homicides and unsolved homicides per city
 
 Create a city_state variable (e.g. “Baltimore, MD”) and then summarize within 
 cities to obtain the total number of homicides and the number of unsolved 
@@ -127,7 +131,7 @@ homicide_data =
 ```
 
 
-## Part 3: Unsolved homocides in Baltimore
+## Part 3: Unsolved homicides in Baltimore
 
 For the city of Baltimore, MD, use the prop.test function to estimate the 
 proportion of homicides that are unsolved; save the output of prop.test as an 
@@ -158,7 +162,7 @@ homicide_data %>%
 
 
 
-## Part 4: Unsolved homocides per city
+## Part 4: Unsolved homicides per city
 
 Now run prop.test for each of the cities in your dataset, and extract both the 
 proportion of unsolved homicides and the confidence interval for each. Do this 
@@ -193,7 +197,7 @@ homicide_data %>%
     geom_errorbar(aes(ymin = lower_bound, ymax = upper_bound, width = 0.2)) + 
     theme(axis.text.x = element_text(angle = 60, hjust = 1)) + 
     labs(
-        title = "Proportion of Unsolved Homocides in 50 Large Cities",
+        title = "Proportion of Unsolved Homicides in 50 Large Cities",
         x = "City, State",
         y = "Proportion of Unsolved Cases", 
         caption = "Data from the Washington Post"
@@ -204,3 +208,4 @@ homicide_data %>%
     )
 ```
 
+The city with the largest proportion of unsolved homicides is Chicago (0.74) and it also has very narrow bounds on the 95% confidence interval for the point estimate. This means that there is more certainty around the number of unsolved homicides in Chicago being over 0.7. The lowest proportion of unsolved homicides is Richmond Virginia. The cities with the highest variability in unsolved homocide proportions are Savannah, GA and Tampa, FL. 
