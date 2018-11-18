@@ -51,6 +51,7 @@ subject_data =
          group = recode(group, "con" = "control", 
                         "exp" = "experimental"))
 
+?fct_recode
 ```
 
 
